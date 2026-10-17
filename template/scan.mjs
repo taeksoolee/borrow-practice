@@ -425,7 +425,13 @@ const writeSignal = (name, out) => {
 const today = new Date().toISOString().slice(0, 10);
 const profileFile = `${today}-profile.md`;
 
-const writeProfile = () => writeSignal(profileFile, renderProfile(targetProfile()));
+// 이 저장소 쪽은 HEAD 커밋을 읽으므로 커밋이 없으면 분석할 수 없다. 분석·프로필 모두 여기서 시작한다
+const writeProfile = () => {
+  if (git(ROOT, ['rev-parse', '--verify', '-q', 'HEAD'], { check: false }) === '') {
+    fail('이 저장소에 커밋이 없다. 도구는 커밋된 내용(HEAD)을 읽어 분석하므로, 커밋을 하나 이상 만든 뒤 실행한다.');
+  }
+  writeSignal(profileFile, renderProfile(targetProfile()));
+};
 
 // ---------------------------------------------------------------- diff
 
