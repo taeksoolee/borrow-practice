@@ -426,7 +426,11 @@ const writeSignal = (name, out) => {
   console.log(path.relative(ROOT, file));
 };
 
-const today = new Date().toISOString().slice(0, 10);
+// 파일 이름·analyzed_at 의 날짜는 사람이 「언제 돌렸나」를 보는 값이라 실행한 곳의 로컬 날짜로 쓴다 (분석 지점은 sha 로 정해져 영향 없음)
+const today = (() => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+})();
 const profileFile = `${today}-profile.md`;
 
 // 이 저장소 쪽은 HEAD 커밋을 읽으므로 커밋이 없으면 분석할 수 없다. 분석·프로필 모두 여기서 시작한다
