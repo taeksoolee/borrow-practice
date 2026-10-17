@@ -106,4 +106,5 @@ node .borrow-practice/scan.mjs --commit-state
 | `reports/<date>.md` | 분석 보고서 — AI 가 쓴다 |
 | `decisions.md` | 결정 기록 — AI 와 사용자가 함께 쓴다 |
 | `state.json` | 소스별 마지막 분석 지점 — `--commit-state` 와 `reset` 으로만 바뀐다 |
+| `signals/.pending.json` | 이번 분석에서 본 원본 최신 지점 — 분석이 쓰고, `--commit-state` 가 `state.json` 으로 옮긴 뒤 지운다. 직접 고치지 않는다 |
 | `.cache/repos/<key>.git` | 원본 bare 사본 — 원본 읽기에 쓴다 |

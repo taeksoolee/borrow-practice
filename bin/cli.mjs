@@ -76,6 +76,7 @@ const confirm = async question => {
 };
 
 const init = async ({ yes }) => {
+  console.log(`borrow-practice ${VERSION}`);
   const root = gitRoot();
   const toolDir = path.join(root, TOOL_DIR_NAME);
   const fresh = !fs.existsSync(toolDir);

@@ -94,8 +94,9 @@ const TECHNIQUES = [
   { key: 'a11y-attr', rx: 'aria-(live|describedby|invalid|busy)|role="(alert|status)"', desc: '접근성 속성' },
 ];
 
+// NOTE: core.quotepath 를 끄지 않으면 한글 등 비ASCII 경로가 "\352\270…" 처럼 따옴표·8진수로 나와 경로 정규식에 걸리지 않는다.
 const git = (repo, args, { check = true } = {}) => {
-  const r = spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+  const r = spawnSync('git', ['-c', 'core.quotepath=false', '-C', repo, ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
   if (check && r.status !== 0) {
     console.error(`git ${args.join(' ')} 실패 (${repo}):\n${r.stderr}`);
     process.exit(1);
@@ -119,6 +120,10 @@ const readJson = (file, fallback) => {
 const lines = text => text.split('\n').filter(Boolean);
 const uniq = xs => [...new Set(xs)];
 const code = s => `\`${s}\``;
+// 훅 명령·CI 실행 명령은 길 수 있어 앞부분만 보이고, 잘렸으면 몇 줄을 뺐는지 적는다
+const HOOK_LINES = 8;
+const RUN_LINES = 15;
+const clipped = (xs, n) => [...xs.slice(0, n).map(code), ...(xs.length > n ? [`…외 ${xs.length - n}줄`] : [])].join(' / ');
 
 const ensureClone = src => {
   const repo = path.join(REPO_CACHE, `${src.key}.git`);
@@ -304,15 +309,14 @@ const profileOf = (repo, rev, { exclude = null, skillPaths = [] } = {}) => {
       path: p,
       commands: lines(show(p))
         .map(l => l.trim())
-        .filter(l => l !== '' && !l.startsWith('#') && !/^(\.|source) /.test(l) && !/^(if|then|else|fi|done|do|exit)\b/.test(l))
-        .slice(0, 8),
+        .filter(l => l !== '' && !l.startsWith('#') && !/^(\.|source) /.test(l) && !/^(if|then|else|fi|done|do|exit)\b/.test(l)),
     }));
 
   const workflows = files
     .filter(p => /^\.github\/workflows\/.+\.ya?ml$/.test(p))
     .map(p => ({
       path: p,
-      runs: runsOf(show(p)).slice(0, 15),
+      runs: runsOf(show(p)),
     }));
 
   const lint = new Map();
@@ -398,10 +402,10 @@ const renderProfile = p => {
   }
   out.push('## 훅', '');
   if (p.hooks.length === 0) out.push('없음');
-  for (const h of p.hooks) out.push(`- ${code(h.path)}: ${h.commands.map(code).join(' / ') || '(명령 없음)'}`);
+  for (const h of p.hooks) out.push(`- ${code(h.path)}: ${clipped(h.commands, HOOK_LINES) || '(명령 없음)'}`);
   out.push('', '## CI 실행 명령', '');
   if (p.workflows.length === 0) out.push('없음');
-  for (const w of p.workflows) out.push(`- ${code(w.path)}: ${w.runs.map(code).join(' / ') || '(run 없음)'}`);
+  for (const w of p.workflows) out.push(`- ${code(w.path)}: ${clipped(w.runs, RUN_LINES) || '(run 없음)'}`);
   out.push('', '## package.json scripts', '');
   const scripts = Object.entries(p.scripts);
   if (scripts.length === 0) out.push('없음');
@@ -692,16 +696,16 @@ const snapshot = (src, repo, head, note = null) => {
   const lintRows = [...theirs.lint]
     .filter(([k, v]) => mine.lint.get(k) !== v)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `| ${code(k)} | ${v} | ${mine.lint.get(k) ?? '없음'} |`);
+    .map(([k, v]) => `| ${code(k)} | ${v} | ${mine.lint.get(k) ?? '설정 파일에 직접 적은 것 중 없음'} |`);
   out.push(...(lintRows.length === 0 ? ['없음'] : ['| 규칙 | 원본 | 이 저장소 |', '|---|---|---|', ...lintRows]), '');
   const onlyFlags = theirs.tsFlags.filter(f => !mine.tsFlags.includes(f));
   out.push('### tsconfig 엄격 옵션 — 원본에만 있음', '', onlyFlags.length === 0 ? '없음' : onlyFlags.map(code).join(', '), '');
   out.push('### 원본 훅', '');
   if (theirs.hooks.length === 0) out.push('없음');
-  for (const h of theirs.hooks) out.push(`- ${blob(h.path)}: ${h.commands.map(code).join(' / ') || '(명령 없음)'}`);
+  for (const h of theirs.hooks) out.push(`- ${blob(h.path)}: ${clipped(h.commands, HOOK_LINES) || '(명령 없음)'}`);
   out.push('', '### 원본 CI 실행 명령', '');
   if (theirs.workflows.length === 0) out.push('없음');
-  for (const w of theirs.workflows) out.push(`- ${blob(w.path)}: ${w.runs.map(code).join(' / ') || '(run 없음)'}`);
+  for (const w of theirs.workflows) out.push(`- ${blob(w.path)}: ${clipped(w.runs, RUN_LINES) || '(run 없음)'}`);
   out.push('');
 
   // 5. 테스트 기법 사용량

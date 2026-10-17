@@ -174,6 +174,7 @@ BORROW_SOURCES=git@github.com:org/repo-a.git,git@github.com:org/repo-b.git#main,
 | `reports/<날짜>.md` | AI 의 분석 보고서 — 후보 표와 근거 | 안 함 |
 | `signals/<날짜>-profile.md` | 우리 저장소 프로필 — 프레임워크·테스트 도구·AI 설정·검사 설정 요약 | 안 함 |
 | `signals/<날짜>-snapshot-<키>.md`·`signals/<날짜>-diff-<키>.md` | 원본에서 뽑은 신호 (판정 없는 재료) | 안 함 |
+| `signals/.pending.json` | 이번 분석에서 본 원본 최신 지점. 보고서를 쓴 뒤 `--commit-state` 가 `state.json` 에 옮기고 지운다 | 안 함 |
 | `.cache/` | 원본 저장소 사본 | 안 함 |
 
 - 결과를 볼 때는 **보고서**를 먼저 보세요. 신호 파일은 AI 가 분석에 쓰는 재료라 날것 그대로입니다.
