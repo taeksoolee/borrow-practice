@@ -4,6 +4,14 @@
   "description": "다른 저장소의 규칙·스킬·테스트 기법·검사 설정을 AI 가 분석해, 이 저장소에 더할 만한 것을 추천하게 하는 도구",
   "license": "MIT",
   "author": "taeksoolee",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taeksoolee/borrow-practice.git"
+  },
+  "homepage": "https://github.com/taeksoolee/borrow-practice#readme",
+  "bugs": {
+    "url": "https://github.com/taeksoolee/borrow-practice/issues"
+  },
   "type": "module",
   "bin": {
     "borrow-practice": "bin/cli.mjs"
