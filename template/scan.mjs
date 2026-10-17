@@ -123,6 +123,11 @@ const code = s => `\`${s}\``;
 // 훅 명령·CI 실행 명령은 길 수 있어 앞부분만 보이고, 잘렸으면 몇 줄을 뺐는지 적는다
 const HOOK_LINES = 8;
 const RUN_LINES = 15;
+const TECHNIQUE_SAMPLES = 2;
+// 표 칸 안의 코드 조각. 파이프가 있으면 표가 깨지므로 이스케이프한다
+const cellCode = s => code(s.replace(/\|/g, '\\|'));
+const sampleCell = (samples, link = h => code(`${h.path}:${h.line}`)) =>
+  samples.map(h => `${link(h)} ${cellCode(h.text)}`).join('<br>') || '-';
 const clipped = (xs, n) => [...xs.slice(0, n).map(code), ...(xs.length > n ? [`…외 ${xs.length - n}줄`] : [])].join(' / ');
 
 const ensureClone = src => {
@@ -328,13 +333,19 @@ const profileOf = (repo, rev, { exclude = null, skillPaths = [] } = {}) => {
     files.filter(f => /^tsconfig[\w.-]*\.json$/.test(f)).flatMap(p => [...show(p).matchAll(TS_FLAGS)].map(m => m[1])),
   ).sort();
 
-  // 테스트 기법 사용량: 원본·이 저장소 모두 커밋된 전체 파일 기준
+  // 테스트 기법 사용량: 원본·이 저장소 모두 테스트 파일 안의 일치 줄만 센다. 제품 코드의 같은 이름(도메인 필드 등)을 세지 않기 위해서다.
+  // 숫자만으로는 오탐을 알 수 없어 대표 일치 줄을 함께 남긴다.
   const techniques = Object.fromEntries(
     TECHNIQUES.map(t => {
-      const counts = lines(
-        git(repo, ['grep', '-c', '-E', t.rx, rev, '--', '.', ...(exclude === null ? [] : [`:!${exclude}`])], { check: false }),
-      );
-      return [t.key, counts.reduce((sum, l) => sum + Number(l.slice(l.lastIndexOf(':') + 1)), 0)];
+      const hits = lines(
+        git(repo, ['grep', '-I', '-n', '-E', t.rx, rev, '--', '.', ...(exclude === null ? [] : [`:!${exclude}`])], { check: false }),
+      )
+        .map(l => l.match(/^[^:]+:(.+?):(\d+):(.*)$/))
+        .filter(m => m !== null && TEST_FILE.test(m[1]))
+        .map(m => ({ path: m[1], line: Number(m[2]), text: m[3].trim().slice(0, 100) }));
+      // 대표 줄은 서로 다른 파일에서 고른다
+      const samples = hits.filter((h, i) => hits.findIndex(o => o.path === h.path) === i).slice(0, TECHNIQUE_SAMPLES);
+      return [t.key, { count: hits.length, samples }];
     }),
   );
 
@@ -414,8 +425,11 @@ const renderProfile = p => {
   if (p.lint.size === 0) out.push('없음');
   for (const [k, v] of [...p.lint].sort(([a], [b]) => a.localeCompare(b))) out.push(`- ${code(k)}: ${v}`);
   out.push('', '## tsconfig 엄격 옵션', '', p.tsFlags.length === 0 ? '없음' : p.tsFlags.map(code).join(', '), '');
-  out.push('## 테스트 기법 사용량 (일치 줄 수)', '', '| 기법 | 줄 수 |', '|---|---|');
-  for (const t of TECHNIQUES) out.push(`| ${t.desc} (${code(t.key)}) | ${p.techniques[t.key]} |`);
+  out.push('## 테스트 기법 사용량 (테스트 파일 안 일치 줄 수 — 오탐이 있으니 예를 보고 판단한다)', '', '| 기법 | 줄 수 | 예 |', '|---|---|---|');
+  for (const t of TECHNIQUES) {
+    const { count, samples } = p.techniques[t.key];
+    out.push(`| ${t.desc} (${code(t.key)}) | ${count} | ${sampleCell(samples)} |`);
+  }
   return out;
 };
 
@@ -586,10 +600,10 @@ const diff = (src, repo, head, last) => {
       .slice(0, 3)
       .map(w => `${link(w.p, files.get(w.p))} (${w.n})`)
       .join(', ');
-    rows.push(`| ${t.desc} (\`${t.key}\`) | ${where.length} | ${mine.techniques[t.key]} | ${sample} |`);
+    rows.push(`| ${t.desc} (\`${t.key}\`) | ${where.length} | ${mine.techniques[t.key].count} | ${sample} |`);
   }
   if (rows.length === 0) out.push('없음');
-  else out.push('| 기법 | 원본 파일 수 | 이 저장소 일치 줄 수 | 대표 파일 |', '|---|---|---|---|', ...rows);
+  else out.push('| 기법 | 원본 파일 수 | 이 저장소 일치 줄 수 (테스트 파일) | 대표 파일 |', '|---|---|---|---|', ...rows);
   out.push('', `테스트 파일 ${tests.length}개를 봤다 (삭제 제외).`, '');
 
   // 4·5. 설정
@@ -713,8 +727,18 @@ const snapshot = (src, repo, head, note = null) => {
   out.push('');
 
   // 5. 테스트 기법 사용량
-  out.push('## 5. 테스트 기법 사용량 (일치 줄 수)', '', '| 기법 | 원본 | 이 저장소 |', '|---|---|---|');
-  for (const t of TECHNIQUES) out.push(`| ${t.desc} (${code(t.key)}) | ${theirs.techniques[t.key]} | ${mine.techniques[t.key]} |`);
+  out.push(
+    '## 5. 테스트 기법 사용량 (테스트 파일 안 일치 줄 수 — 오탐이 있으니 예를 보고 판단한다)',
+    '',
+    '| 기법 | 원본 | 이 저장소 | 원본 예 | 이 저장소 예 |',
+    '|---|---|---|---|---|',
+  );
+  for (const t of TECHNIQUES) {
+    const a = theirs.techniques[t.key];
+    const b = mine.techniques[t.key];
+    const blobLine = h => `[${h.path}:${h.line}](${src.web}/blob/${head}/${h.path}#L${h.line})`;
+    out.push(`| ${t.desc} (${code(t.key)}) | ${a.count} | ${b.count} | ${sampleCell(a.samples, blobLine)} | ${sampleCell(b.samples)} |`);
+  }
   out.push('');
 
   // 6. 의존성 — 원본에만 있는 것. 프레임워크가 다르면 대부분 그 생태계 패키지라 AI 가 거른다.
