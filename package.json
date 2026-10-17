@@ -18,7 +18,8 @@
   },
   "files": [
     "bin",
-    "template"
+    "template",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=22"
