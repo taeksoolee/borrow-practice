@@ -783,12 +783,16 @@ const state = readJson(STATE_FILE, {});
 if (args.includes('--commit-state')) {
   const pending = readJson(PENDING_FILE, {});
   if (Object.keys(pending).length === 0) fail('반영할 분석 결과가 없다. 먼저 분석을 돌린다.');
-  for (const [key, sha] of Object.entries(pending)) state[key] = { ...state[key], last_sha: sha, analyzed_at: today };
+  // 이전 버전의 .pending.json 은 키 → sha 문자열이다
+  const entries = Object.entries(pending).map(([key, v]) => [key, typeof v === 'string' ? { sha: v, branch: null } : v]);
+  for (const [key, { sha, branch }] of entries) {
+    state[key] = { ...state[key], last_sha: sha, ...(branch === null ? {} : { branch }), analyzed_at: today };
+  }
   fs.writeFileSync(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`);
   fs.rmSync(PENDING_FILE);
   console.log(
-    `state.json 갱신: ${Object.entries(pending)
-      .map(([k, v]) => `${k}=${v.slice(0, 8)}`)
+    `state.json 갱신: ${entries
+      .map(([k, v]) => `${k}=${v.sha.slice(0, 8)}${v.branch === null ? '' : ` (${v.branch})`}`)
       .join(', ')}`,
   );
   process.exit(0);
@@ -802,7 +806,8 @@ if (only !== undefined && !sources.some(s => s.key === only)) {
 /**
  * NOTE:
  * 소스마다 분석 방식을 state.json 으로 정한다. 마지막 분석 지점이 없으면 전체 비교, 있으면 그 지점부터 최신까지.
- * 지점이 강제 push 로 사라졌으면 이어 볼 기준이 없으므로 전체 비교로 돌아간다.
+ * 보는 브랜치가 바뀌었거나, 지점이 사라졌거나(강제 push), 지점이 지금 브랜치 이력 밖이면 이어 볼 기준이 없으므로
+ * 전체 비교로 돌아간다. 브랜치를 기록하는 이유: 기본 브랜치를 자동으로 보는 소스는 원본 설정만으로 브랜치가 바뀔 수 있다.
  * 처음부터 다시 보고 싶으면 state.json(또는 그 소스 항목)을 지운다.
  */
 writeProfile();
@@ -811,15 +816,23 @@ for (const src of sources.filter(s => only === undefined || s.key === only)) {
   const repo = ensureClone(src);
   const head = git(repo, ['rev-parse', `origin/${src.branch}`]).trim();
   const last = state[src.key]?.last_sha ?? null;
-  const lost = last !== null && git(repo, ['cat-file', '-t', last], { check: false }).trim() !== 'commit';
-  if (last !== null && !lost) {
+  // 브랜치 기록이 없는 항목(이전 버전)은 지점이 이력 안에 있는지만 본다
+  const lastBranch = state[src.key]?.branch ?? null;
+  let fallback = null;
+  if (last !== null) {
+    if (lastBranch !== null && lastBranch !== src.branch) {
+      fallback = `보는 브랜치가 \`${lastBranch}\` 에서 \`${src.branch}\` 로 바뀌어 전체 비교로 돌아갔다`;
+    } else if (git(repo, ['cat-file', '-t', last], { check: false }).trim() !== 'commit') {
+      fallback = `마지막 분석 지점 \`${last.slice(0, 8)}\` 이 원본에 없어(강제 push 등) 전체 비교로 돌아갔다`;
+    } else if (spawnSync('git', ['-C', repo, 'merge-base', '--is-ancestor', last, head]).status !== 0) {
+      fallback = `마지막 분석 지점 \`${last.slice(0, 8)}\` 이 \`origin/${src.branch}\` 이력에 없어(브랜치 변경·강제 push 등) 전체 비교로 돌아갔다`;
+    }
+  }
+  if (last !== null && fallback === null) {
     writeSignal(`${today}-diff-${src.key}.md`, diff(src, repo, head, last));
   } else {
-    const note = lost
-      ? `마지막 분석 지점 \`${last.slice(0, 8)}\` 이 원본에 없어(강제 push 등) 전체 비교로 돌아갔다`
-      : '첫 분석이라 전체 비교';
-    writeSignal(`${today}-snapshot-${src.key}.md`, snapshot(src, repo, head, note));
+    writeSignal(`${today}-snapshot-${src.key}.md`, snapshot(src, repo, head, fallback ?? '첫 분석이라 전체 비교'));
   }
-  pending[src.key] = head;
+  pending[src.key] = { sha: head, branch: src.branch };
 }
 fs.writeFileSync(PENDING_FILE, JSON.stringify(pending));

@@ -10,7 +10,7 @@ borrow-practice 는 다른 저장소(`.env` 의 `BORROW_SOURCES`)를 분석해, 
 |---|---|---|
 | 없음 (첫 분석) | **전체 비교** — 원본과 이 저장소의 지금 상태를 나란히 | `signals/<date>-snapshot-<key>.md` |
 | 있음 | **변경분** — 마지막 분석 지점부터 원본 최신까지. 그 사이 PR·문서 포함 | `signals/<date>-diff-<key>.md` |
-| 있지만 그 커밋이 원본에 없음 (강제 push 등) | 전체 비교로 돌아감 (신호 머리말에 사유) | `signals/<date>-snapshot-<key>.md` |
+| 있지만 보는 브랜치가 바뀜, 또는 그 커밋이 지금 브랜치 이력에 없음 (강제 push 등) | 전체 비교로 돌아감 (신호 머리말에 사유) | `signals/<date>-snapshot-<key>.md` |
 
 ## 0. 시작 전에
 
