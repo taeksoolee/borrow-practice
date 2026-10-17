@@ -1,0 +1,7 @@
+# borrow-practice 실행 결과와 개인 설정. 도구 파일(README·run·common·scan.mjs·.env.example), 저장소 설정 config.json,
+# 결정 기록 decisions.md 와 분석 지점 state.json 을 커밋한다.
+# 팀과 공유하지 않으려면 decisions.md 와 state.json 을 「둘 다」 아래에 더한다 — 하나만 빼면 둘이 어긋난다.
+.env
+.cache/
+signals/
+reports/
