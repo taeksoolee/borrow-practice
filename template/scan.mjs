@@ -8,6 +8,7 @@
  *   node .borrow-practice/scan.mjs --source KEY       # 한 소스만
  *   node .borrow-practice/scan.mjs --commit-state     # 보고서를 쓴 뒤 분석 지점 반영
  *   node .borrow-practice/scan.mjs profile            # 이 저장소 프로필만
+ *   node .borrow-practice/scan.mjs reset [--source KEY | --all] [--plan]   # 분석 지점(--all 이면 결정 기록까지) 지우기
  *
  * 설정
  *   .env         개인 설정. BORROW_SOURCES — 쉼표로 구분한 저장소 주소, 브랜치는 `주소#브랜치` (기본은 원본의 기본 브랜치)
@@ -41,6 +42,7 @@ const PENDING_FILE = path.join(SIGNAL_DIR, '.pending.json');
 const STATE_FILE = path.join(TOOL_DIR, 'state.json');
 const ENV_FILE = path.join(TOOL_DIR, '.env');
 const CONFIG_FILE = path.join(TOOL_DIR, 'config.json');
+const DECISIONS_FILE = path.join(TOOL_DIR, 'decisions.md');
 const TOOL_PREFIX = `${path.relative(ROOT, TOOL_DIR)}/`;
 
 const TEST_FILE = /(\.test\.|\.spec\.|\/__tests?__\/|\/e2e\/)/;
@@ -763,12 +765,78 @@ const toSource = entry => {
   return { key: m[2].toLowerCase(), url, branch, slug: `${m[1]}/${m[2]}`, web: `https://github.com/${m[1]}/${m[2]}` };
 };
 
-const USAGE = '사용법: node .borrow-practice/scan.mjs [--source KEY] | --commit-state | profile';
+const USAGE =
+  '사용법: node .borrow-practice/scan.mjs [--source KEY] | --commit-state | profile | reset [--source KEY | --all] [--plan]';
+
+/**
+ * NOTE:
+ * 처음부터 다시 분석하도록 분석 지점을 지운다. --all 이면 결정 기록(decisions.md)까지 지운다.
+ * 확인은 받지 않는다 — 사람은 `npx borrow-practice reset` 이, AI 는 run.md 절차가 먼저 확인을 받는다.
+ * --plan 은 지우지 않고 무엇을 지울지 JSON 으로 알린다. CLI 가 이걸 보여 주고 확인을 받는다.
+ * 아직 반영하지 않은 분석 결과(.pending.json)도 함께 지운다. 남겨 두면 다음 --commit-state 가 지운 지점을 되살린다.
+ */
+const reset = () => {
+  const all = args.includes('--all');
+  const only = opt('--source');
+  const known = ['reset', '--all', '--plan', '--source', ...(only === undefined ? [] : [only])];
+  const unknown = args.filter(a => !known.includes(a));
+  if (unknown.length > 0 || (args.includes('--source') && only === undefined)) fail(USAGE);
+  if (all && only !== undefined) fail('--all 과 --source 는 함께 쓰지 않는다.');
+
+  const state = readJson(STATE_FILE, null);
+  const rel = file => path.relative(ROOT, file);
+  const tracked = file => spawnSync('git', ['-C', ROOT, 'ls-files', '--error-unmatch', rel(file)], { stdio: 'ignore' }).status === 0;
+  const lines = [];
+  const shared = [];
+  const actions = [];
+
+  if (only !== undefined) {
+    if (state?.[only] === undefined) {
+      fail(`state.json 에 ${only} 항목이 없다. 있는 키: ${Object.keys(state ?? {}).join(', ') || '(없음)'}`);
+    }
+    lines.push(`${rel(STATE_FILE)} 의 ${only} 항목 — 다음 실행에서 ${only} 만 전체 비교가 된다`);
+    actions.push(() => {
+      delete state[only];
+      fs.writeFileSync(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`);
+      const pending = readJson(PENDING_FILE, null);
+      if (pending?.[only] === undefined) return;
+      delete pending[only];
+      fs.writeFileSync(PENDING_FILE, JSON.stringify(pending));
+    });
+    if (tracked(STATE_FILE)) shared.push(rel(STATE_FILE));
+  } else {
+    if (state !== null && Object.keys(state).length > 0) {
+      lines.push(`${rel(STATE_FILE)} — 다음 실행에서 모든 소스가 전체 비교가 된다`);
+      actions.push(() => fs.rmSync(STATE_FILE));
+      if (tracked(STATE_FILE)) shared.push(rel(STATE_FILE));
+    }
+    if (all && fs.existsSync(DECISIONS_FILE)) {
+      lines.push(`${rel(DECISIONS_FILE)} — 채택·보류·제외 결정이 모두 사라져, 이미 제외한 것도 다시 추천된다`);
+      actions.push(() => fs.rmSync(DECISIONS_FILE));
+      if (tracked(DECISIONS_FILE)) shared.push(rel(DECISIONS_FILE));
+    }
+    if (lines.length > 0) actions.push(() => fs.rmSync(PENDING_FILE, { force: true }));
+  }
+
+  if (args.includes('--plan')) {
+    console.log(JSON.stringify({ lines, shared }));
+    process.exit(0);
+  }
+  if (lines.length === 0) {
+    console.log('지울 것이 없다.');
+    process.exit(0);
+  }
+  for (const action of actions) action();
+  console.log(`지웠다:\n${lines.map(l => `  - ${l}`).join('\n')}`);
+  if (shared.length > 0) console.log(`git 에 커밋된 파일이다. 이 변경을 커밋하면 팀 전체에 적용된다: ${shared.join(', ')}`);
+  process.exit(0);
+};
 
 if (args[0] === 'profile') {
   writeProfile();
   process.exit(0);
 }
+if (args[0] === 'reset') reset();
 if (args[0] !== undefined && !args[0].startsWith('--')) fail(USAGE);
 
 const env = readEnv();

@@ -87,7 +87,7 @@ node .borrow-practice/scan.mjs --commit-state
 | 채택한 것이 잘 적용돼 있는지 확인만 | `decisions.md` 의 채택 항목을 [common.md 「적용 확인」](common.md#적용-확인)대로 하나씩 확인하고 「적용 확인」 칸을 채운다. 새 보고서는 쓰지 않는다 |
 | 보류해 둔 것 다시 보기 | `decisions.md` 의 보류 항목마다 「다시 볼 조건」을 확인하고, 충족된 것만 [common.md 「결정」](common.md#결정-ai-와-사용자)대로 하나씩 다시 묻는다. AI 가 혼자 확인할 수 없는 조건이면 사용자에게 지금 다시 볼지 묻는다 |
 | 중간에 끊긴 결정 이어 가기 | 사용자가 가리킨 보고서(없으면 `reports/` 의 가장 최근)를 열고 `decisions.md` 에 아직 없는 후보부터 하나씩 이어서 묻는다. 신호를 다시 뽑지 않는다 |
-| 처음부터 다시 분석 | `state.json`(한 소스만이면 그 항목)을 지우면 다음 실행이 전체 비교가 된다. 지우기 전에 사용자에게 확인받는다. `state.json` 을 커밋해 팀과 공유하는 경우 지운 것도 팀 전체에 영향이 간다는 점을 알린다 |
+| 처음부터 다시 분석 | `node .borrow-practice/scan.mjs reset --plan`(한 소스만이면 `--source <key>`, 결정까지 지우라고 했으면 `--all`)으로 지울 것을 확인해 사용자에게 보여 주고, 확인받은 뒤 `--plan` 을 빼고 실행한다. `shared` 에 나온 파일은 커밋돼 있어 지운 것을 커밋하면 팀 전체에 영향이 간다는 점을 알린다. 「결정까지」라고 하지 않았으면 `--all` 을 쓰지 않는다 |
 
 ## 신호 추출기 공통 사항
 
@@ -105,5 +105,5 @@ node .borrow-practice/scan.mjs --commit-state
 | `signals/<date>-diff-<key>.md` | 변경분 신호 |
 | `reports/<date>.md` | 분석 보고서 — AI 가 쓴다 |
 | `decisions.md` | 결정 기록 — AI 와 사용자가 함께 쓴다 |
-| `state.json` | 소스별 마지막 분석 지점 — `--commit-state` 로만 바뀐다 |
+| `state.json` | 소스별 마지막 분석 지점 — `--commit-state` 와 `reset` 으로만 바뀐다 |
 | `.cache/repos/<key>.git` | 원본 bare 사본 — 원본 읽기에 쓴다 |

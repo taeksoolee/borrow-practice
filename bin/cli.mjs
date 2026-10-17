@@ -7,8 +7,9 @@
  * 사용법
  *   npx borrow-practice init          # 없으면 설치, 있으면 도구 파일만 이 버전으로 다시 깐다
  *   npx borrow-practice init --yes    # 고친 도구 파일이 있어도 묻지 않고 덮어쓴다
+ *   npx borrow-practice reset [--source KEY | --all] [--yes]   # 확인을 받고 설치된 scan.mjs reset 에 넘긴다
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -135,20 +136,69 @@ const init = async ({ yes }) => {
   }
 };
 
-const USAGE = `사용법: npx borrow-practice init [--yes]
+// 무엇을 지울지는 설치된 scan.mjs 가 정한다(--plan). CLI 는 그걸 보여 주고 확인만 받는다
+const reset = async ({ yes, passthrough }) => {
+  const scan = path.join(gitRoot(), TOOL_DIR_NAME, 'scan.mjs');
+  if (!fs.existsSync(scan)) fail('설치되지 않았다. 먼저 `npx borrow-practice@latest init` 을 실행한다.');
+  const run = extra => spawnSync(process.execPath, [scan, 'reset', ...passthrough, ...extra], { encoding: 'utf8' });
 
-  init     없으면 설치하고, 있으면 도구 파일만 이 버전으로 다시 깐다.
-           분석 기록과 설정(decisions·state·config·.env·.gitignore 등)은 그대로 둔다.
-  --yes    고친 도구 파일이 있어도 묻지 않고 덮어쓴다.`;
+  const planned = run(['--plan']);
+  let plan = null;
+  try {
+    plan = planned.status === 0 ? JSON.parse(planned.stdout) : null;
+  } catch {}
+  if (plan === null) {
+    // reset 이 없는 이전 버전 scan.mjs 는 사용법(reset 이 빠진)만 출력하고 끝난다
+    if (planned.stderr.includes('사용법') && !planned.stderr.includes('reset')) {
+      fail('설치된 도구가 reset 을 지원하지 않는 이전 버전이다. `npx borrow-practice@latest init` 으로 갱신한다.');
+    }
+    process.stderr.write(planned.stderr);
+    process.exit(planned.status || 1);
+  }
+  if (plan.lines.length === 0) {
+    console.log('지울 것이 없다.');
+    return;
+  }
+
+  if (!yes) {
+    console.log(`아래를 지운다.\n${plan.lines.map(l => `  - ${l}`).join('\n')}`);
+    if (plan.shared.length > 0) {
+      console.log(`git 에 커밋된 파일이다. 지운 것을 커밋하면 팀 전체가 처음부터 다시 하게 된다: ${plan.shared.join(', ')}`);
+    }
+    if (!process.stdin.isTTY) fail('확인을 받을 수 없는 환경이다. 지워도 되면 --yes 를 붙인다.');
+    if (!(await confirm('지울까요?'))) fail('멈췄다. 아무것도 지우지 않았다.');
+  }
+
+  const done = run([]);
+  process.stdout.write(done.stdout);
+  process.stderr.write(done.stderr);
+  if (done.status !== 0) process.exit(done.status ?? 1);
+};
+
+const USAGE = `사용법: npx borrow-practice <init | reset> [옵션]
+
+  init                 없으면 설치하고, 있으면 도구 파일만 이 버전으로 다시 깐다.
+                       분석 기록과 설정(decisions·state·config·.env·.gitignore 등)은 그대로 둔다.
+  reset                분석 지점(state.json)을 지워 모든 소스를 처음부터 다시 분석하게 한다. 결정 기록은 그대로 둔다.
+  reset --source KEY   그 소스의 분석 지점만 지운다.
+  reset --all          분석 지점과 결정 기록(decisions.md)을 함께 지운다.
+  --yes                묻지 않고 진행한다 (init: 고친 도구 파일 덮어쓰기, reset: 지우기).`;
 
 const [command, ...rest] = process.argv.slice(2);
-const unknown = rest.filter(arg => arg !== '--yes');
 if (command === undefined || command === '-h' || command === '--help') {
   console.log(USAGE);
-} else if (command !== 'init') {
-  fail(`알 수 없는 명령: ${command}\n\n${USAGE}`);
-} else if (unknown.length > 0) {
-  fail(`알 수 없는 옵션: ${unknown.join(' ')}\n\n${USAGE}`);
-} else {
+} else if (command === 'init') {
+  const unknown = rest.filter(arg => arg !== '--yes');
+  if (unknown.length > 0) fail(`알 수 없는 옵션: ${unknown.join(' ')}\n\n${USAGE}`);
   await init({ yes: rest.includes('--yes') });
+} else if (command === 'reset') {
+  const passthrough = rest.filter(arg => arg !== '--yes');
+  const valid =
+    passthrough.length === 0 ||
+    (passthrough.length === 1 && passthrough[0] === '--all') ||
+    (passthrough.length === 2 && passthrough[0] === '--source' && !passthrough[1].startsWith('-'));
+  if (!valid) fail(`알 수 없는 옵션: ${passthrough.join(' ')}\n\n${USAGE}`);
+  await reset({ yes: rest.includes('--yes'), passthrough });
+} else {
+  fail(`알 수 없는 명령: ${command}\n\n${USAGE}`);
 }

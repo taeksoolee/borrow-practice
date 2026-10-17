@@ -77,9 +77,17 @@ npx borrow-practice@latest init
 
 ### 처음부터 다시
 
-`state.json` 을 지우면(한 저장소만이면 그 항목만) 다음 실행이 전체 비교가 됩니다. `decisions.md` 는 그대로 두므로 이미 제외한 것은 다시 추천되지 않습니다.
+분석 지점을 지우면 다음 실행이 전체 비교가 됩니다. AI 에게 시켜도 되고, 직접 명령으로 해도 됩니다.
 
-- `state.json` 을 팀과 공유한다면 지운 것도 커밋되어 **팀 전체가** 처음부터 다시 하게 됩니다.
+```bash
+npx borrow-practice reset                  # 모든 저장소의 분석 지점(state.json)만 지움 — 결정은 유지
+npx borrow-practice reset --source web-app # 그 저장소의 분석 지점만
+npx borrow-practice reset --all            # 분석 지점과 결정 기록(decisions.md)까지
+```
+
+- 지우기 전에 무엇을 지우는지 보여 주고 확인을 받습니다. 묻지 않으려면 `--yes` 를 붙입니다.
+- `--all` 이 아니면 `decisions.md` 는 그대로라 이미 제외한 것은 다시 추천되지 않습니다.
+- `state.json`·`decisions.md` 를 팀과 공유한다면 지운 것도 커밋되어 **팀 전체가** 처음부터 다시 하게 됩니다. 커밋된 파일이면 확인할 때 함께 알려 줍니다.
 
 ---
 
