@@ -38,6 +38,7 @@ const TOOL_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = execFileSync('git', ['-C', TOOL_DIR, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 const REPO_CACHE = path.join(TOOL_DIR, '.cache/repos');
 const SIGNAL_DIR = path.join(TOOL_DIR, 'signals');
+const REPORT_DIR = path.join(TOOL_DIR, 'reports');
 const PENDING_FILE = path.join(SIGNAL_DIR, '.pending.json');
 const STATE_FILE = path.join(TOOL_DIR, 'state.json');
 const ENV_FILE = path.join(TOOL_DIR, '.env');
@@ -867,6 +868,9 @@ const reset = () => {
   for (const action of actions) action();
   console.log(`지웠다:\n${lines.map(l => `  - ${l}`).join('\n')}`);
   if (shared.length > 0) console.log(`git 에 커밋된 파일이다. 이 변경을 커밋하면 팀 전체에 적용된다: ${shared.join(', ')}`);
+  // 신호·보고서는 커밋되지 않아 지우면 되돌릴 수 없으므로 남긴다
+  const outputs = [SIGNAL_DIR, REPORT_DIR].filter(dir => fs.existsSync(dir)).map(dir => `${rel(dir)}/`);
+  if (outputs.length > 0) console.log(`${outputs.join('·')} 는 남겨 두었다 (지난 결과 참고용). 필요 없으면 직접 지운다.`);
   process.exit(0);
 };
 
