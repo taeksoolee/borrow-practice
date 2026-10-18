@@ -1,5 +1,8 @@
 # borrow-practice
 
+[![npm](https://img.shields.io/npm/v/borrow-practice)](https://www.npmjs.com/package/borrow-practice)
+[![license](https://img.shields.io/github/license/taeksoolee/borrow-practice)](LICENSE)
+
 다른 저장소에서 잘 쓰고 있는 규칙·스킬·테스트 원칙·검사 설정을 **AI 가 분석해, 내 저장소에 더할 만한 것을 추천**하게 하는 도구입니다. 추천만 하고 적용은 하지 않습니다. 가져올지 말지는 AI 와 함께 정하고, 결과는 저장소에 기록으로 남습니다.
 
 - 원본 저장소마다 마지막으로 분석한 지점을 남겨, 처음에는 전체 비교, 그다음부터는 변경분(그 사이 PR·문서·설정·테스트)만 봅니다.
